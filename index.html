@@ -37,33 +37,39 @@
         #mobile-controls {
             display: none; /* Controlado via JS */
         }
-        .joystick-zone {
-            position: absolute; bottom: 20px; left: 20px; width: 150px; height: 150px;
+        
+        /* Estilos comuns de Joystick */
+        .joystick-base {
+            position: absolute; bottom: 30px; width: 140px; height: 140px;
             background: rgba(255, 255, 255, 0.1); border-radius: 50%; pointer-events: auto;
             border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(2px);
         }
         .joystick-knob {
             position: absolute; top: 50%; left: 50%; width: 50px; height: 50px;
-            background: rgba(255, 255, 255, 0.5); border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8); border-radius: 50%;
             transform: translate(-50%, -50%); pointer-events: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
+
+        /* Posicionamento */
+        #joystick-left { left: 30px; }
+        #joystick-right { right: 30px; }
+
         .action-btn {
-            position: absolute; width: 80px; height: 80px; border-radius: 50%;
+            position: absolute; width: 70px; height: 70px; border-radius: 50%;
             background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.4);
             display: flex; align-items: center; justify-content: center;
             font-size: 24px; color: white; pointer-events: auto;
             backdrop-filter: blur(4px);
+            transition: transform 0.1s;
         }
-        .action-btn:active { background: rgba(255, 215, 0, 0.5); transform: scale(0.95); }
-        #shoot-btn { bottom: 60px; right: 30px; width: 90px; height: 90px; background: rgba(239, 68, 68, 0.3); }
-        #jump-btn { bottom: 180px; right: 50px; width: 60px; height: 60px; }
-        #reload-btn { bottom: 60px; right: 140px; width: 60px; height: 60px; font-size: 16px; }
-
-        #touch-look-zone {
-            position: absolute; top: 0; bottom: 0; right: 0; width: 50%; /* Metade direita da tela */
-            z-index: 9; pointer-events: auto;
-            display: none; /* Controlado via JS */
-        }
+        .action-btn:active { background: rgba(255, 215, 0, 0.5); transform: scale(0.90); }
+        
+        /* Reposicionamento dos botões para não atrapalhar o Joystick Direito */
+        #shoot-btn { bottom: 180px; right: 40px; width: 80px; height: 80px; background: rgba(239, 68, 68, 0.4); font-size: 30px; }
+        #jump-btn { bottom: 130px; right: 130px; width: 60px; height: 60px; }
+        #reload-btn { bottom: 40px; right: 190px; width: 50px; height: 50px; font-size: 16px; }
 
         @keyframes hitmarker {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
@@ -87,9 +93,6 @@
 </head>
 <body>
     <canvas id="game-canvas"></canvas>
-
-    <!-- Zona de toque para mira (Só ativa durante o jogo) -->
-    <div id="touch-look-zone"></div>
 
     <div id="ui-layer" class="ui-layer flex flex-col justify-between">
         <div id="damage-overlay" class="damage-flash"></div>
@@ -122,7 +125,7 @@
                 <div class="scope-crosshair-v"></div>
             </div>
 
-            <div class="absolute bottom-4 left-4 md:bottom-8 md:left-8 transition-transform">
+            <div class="absolute bottom-4 left-4 md:bottom-8 md:left-8 transition-transform pointer-events-none">
                 <div class="flex items-end space-x-2">
                     <div class="text-4xl md:text-6xl font-black text-white drop-shadow-md" id="hp-display">100</div>
                     <div class="text-sm md:text-xl font-bold text-gray-400 mb-2 md:mb-3">HP</div>
@@ -132,7 +135,7 @@
                 </div>
             </div>
 
-            <div class="absolute bottom-4 right-4 md:bottom-8 md:right-8 text-right transition-transform" style="z-index: 5;">
+            <div class="absolute bottom-4 right-4 md:bottom-8 md:right-8 text-right transition-transform pointer-events-none" style="z-index: 5;">
                 <div class="text-5xl md:text-7xl font-black text-yellow-400 italic drop-shadow-md" id="ammo-display">30</div>
                 <div class="text-xs md:text-sm font-bold text-gray-400 tracking-widest uppercase" id="weapon-display">RIFLE</div>
             </div>
@@ -142,27 +145,34 @@
             </div>
         </div>
 
-        <!-- Mobile Controls (Joystick & Buttons) - Only visible IN-GAME -->
+        <!-- Mobile Controls (Dual Joystick) -->
         <div id="mobile-controls" class="ui-layer interactive">
-            <div id="joystick-zone" class="joystick-zone">
-                <div id="joystick-knob" class="joystick-knob"></div>
+            <!-- Left Joystick (Movement) -->
+            <div id="joystick-left" class="joystick-base">
+                <div id="knob-left" class="joystick-knob"></div>
             </div>
+            
+            <!-- Right Joystick (Aim/Look) -->
+            <div id="joystick-right" class="joystick-base">
+                <div id="knob-right" class="joystick-knob"></div>
+            </div>
+
             <div id="shoot-btn" class="action-btn">🔫</div>
             <div id="jump-btn" class="action-btn">🦘</div>
             <div id="reload-btn" class="action-btn">🔄</div>
         </div>
 
-        <!-- Menu Principal (Z-Index 50 para ficar acima de tudo) -->
+        <!-- Menu Principal (Z-Index 50) -->
         <div id="main-menu" class="interactive absolute inset-0 bg-gray-900 flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] z-50">
             <div class="absolute inset-0 bg-black bg-opacity-70"></div>
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.4: Fast Fire & Smooth Aim</p>
+                    <p class="text-gray-400 font-mono mb-8">v3.5: Dual Stick Controls</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
-                    <p class="mt-4 text-gray-500 text-xs md:text-sm">PC: WASD + Mouse | MOBILE: Joystick + Touch</p>
+                    <p class="mt-4 text-gray-500 text-xs md:text-sm">PC: WASD + Mouse | MOBILE: Dual Sticks</p>
                 </div>
             </div>
         </div>
@@ -197,14 +207,10 @@
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        // --- CONTROLE DE VISIBILIDADE DE INTERFACE ---
         function setControlsVisibility(visible) {
             const display = visible && isMobile ? 'block' : 'none';
             document.getElementById('mobile-controls').style.display = display;
-            document.getElementById('touch-look-zone').style.display = display;
         }
-
-        // Inicialmente oculto
         setControlsVisibility(false);
 
         const AudioSys = {
@@ -239,7 +245,8 @@
 
         const CONFIG = {
             fov: 80,
-            sensitivity: isMobile ? 0.005 : 0.002,
+            sensitivity: 0.002,
+            turnSpeedMobile: 2.5, // Velocidade de giro no mobile
             gravity: 30,
             jumpForce: 13,
             playerSpeed: 14,
@@ -247,7 +254,6 @@
             regenRate: 5 
         };
 
-        // Aumentado RPM da Assalto de 120 para 600 (10 tiros/seg)
         const CLASSES = {
             assault: { name: "Assalto", hp: 100, speed: 1.0, color: 0x3B82F6, weapon: { name: "Rifle", damage: 15, rpm: 600, auto: true, mag: 30, reload: 1500, spread: 0.03, pellets: 1 } },
             sniper: { name: "Sniper", hp: 80, speed: 0.95, color: 0xEF4444, weapon: { name: "AWP", damage: 100, rpm: 1500, auto: false, mag: 5, reload: 2500, spread: 0.001, scope: true, pellets: 1 } },
@@ -266,11 +272,9 @@
         let weaponMeshes = {};
         let lastDamageTime = 0;
 
-        // Mobile Controls
-        let touchStartPos = { x: 0, y: 0 };
-        let joystickActive = false;
-        let joystickId = null;
-        let lookTouchId = null; // ID do toque para a câmera
+        // Mobile Controls State
+        let leftJoystick = { active: false, id: null, startX: 0, startY: 0, moveX: 0, moveY: 0 };
+        let rightJoystick = { active: false, id: null, startX: 0, startY: 0, lookX: 0, lookY: 0 };
 
         function init() {
             scene = new THREE.Scene();
@@ -286,7 +290,6 @@
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
-            
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.BasicShadowMap;
 
@@ -318,10 +321,10 @@
             animate();
         }
 
+        // ... [Manter funções createWeaponModels, generateMap, createCharacterMesh, spawnEnemy iguais] ...
         function createWeaponModels() {
             const matDark = new THREE.MeshLambertMaterial({ color: 0x111111 });
             const matMetal = new THREE.MeshLambertMaterial({ color: 0x555555 });
-            
             const rifle = new THREE.Group();
             rifle.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.6), matDark));
             const rBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.4), matMetal);
@@ -331,7 +334,6 @@
             rifle.visible = false;
             weaponGroup.add(rifle);
             weaponMeshes['assault'] = rifle;
-
             const sniper = new THREE.Group();
             sniper.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.7), matDark));
             const sBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.9), matMetal);
@@ -341,7 +343,6 @@
             sniper.visible = false;
             weaponGroup.add(sniper);
             weaponMeshes['sniper'] = sniper;
-
             const shotgun = new THREE.Group();
             shotgun.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 0.5), new THREE.MeshLambertMaterial({ color: 0x8B4513 })));
             const shBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.6), matMetal);
@@ -351,7 +352,6 @@
             shotgun.visible = false;
             weaponGroup.add(shotgun);
             weaponMeshes['shotgun'] = shotgun;
-            
             scene.add(camera);
         }
 
@@ -363,11 +363,9 @@
             floor.receiveShadow = true;
             scene.add(floor);
             worldObjects.push(floor);
-
             const wallMat = new THREE.MeshLambertMaterial({ color: 0x9CA3AF });
             const boxMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
             const darkMat = new THREE.MeshLambertMaterial({ color: 0x1F2937 });
-
             function createBox(x, y, z, w, h, d, mat) {
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
                 mesh.position.set(x, y + h/2, z);
@@ -376,12 +374,10 @@
                 scene.add(mesh);
                 worldObjects.push(mesh);
             }
-
             createBox(0, 0, -60, 120, 10, 2, wallMat);
             createBox(0, 0, 60, 120, 10, 2, wallMat);
             createBox(-60, 0, 0, 2, 10, 120, wallMat);
             createBox(60, 0, 0, 2, 10, 120, wallMat);
-
             createBox(0, 0, 0, 10, 4, 10, darkMat);
             createBox(-40, 0, 0, 2, 6, 80, wallMat);
             createBox(-50, 0, -20, 4, 4, 4, boxMat);
@@ -449,6 +445,7 @@
         }
 
         function setupInputs() {
+            // PC Inputs
             document.addEventListener('keydown', (e) => {
                 if(e.code === 'KeyW') input.forward = true;
                 if(e.code === 'KeyS') input.backward = true;
@@ -471,51 +468,93 @@
                 if(gameActive && !isMobile) document.getElementById('game-canvas').requestPointerLock();
             });
 
+            // MOBILE DUAL JOYSTICK SETUP
             if(isMobile) {
-                const joystickZone = document.getElementById('joystick-zone');
-                const knob = document.getElementById('joystick-knob');
-                
-                joystickZone.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.changedTouches[0];
-                    joystickId = touch.identifier;
-                    joystickActive = true;
-                    touchStartPos = { x: touch.clientX, y: touch.clientY };
-                }, {passive: false});
+                // Função helper para Joystick
+                function setupJoystick(zoneId, knobId, stateObj) {
+                    const zone = document.getElementById(zoneId);
+                    const knob = document.getElementById(knobId);
+                    
+                    zone.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        const touch = e.changedTouches[0];
+                        stateObj.id = touch.identifier;
+                        stateObj.active = true;
+                        stateObj.startX = touch.clientX;
+                        stateObj.startY = touch.clientY;
+                    }, {passive: false});
 
-                joystickZone.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if(!joystickActive) return;
-                    let touch = null;
-                    for(let i=0; i<e.changedTouches.length; i++) {
-                        if(e.changedTouches[i].identifier === joystickId) touch = e.changedTouches[i];
-                    }
-                    if(!touch) return;
-                    const deltaX = touch.clientX - touchStartPos.x;
-                    const deltaY = touch.clientY - touchStartPos.y;
-                    const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
-                    const maxDist = 35;
-                    const clampedDist = Math.min(dist, maxDist);
-                    const angle = Math.atan2(deltaY, deltaX);
-                    const knobX = Math.cos(angle) * clampedDist;
-                    const knobY = Math.sin(angle) * clampedDist;
-                    knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-                    input.forward = deltaY < -10;
-                    input.backward = deltaY > 10;
-                    input.left = deltaX < -10;
-                    input.right = deltaX > 10;
-                }, {passive: false});
+                    zone.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        if(!stateObj.active) return;
+                        
+                        let touch = null;
+                        for(let i=0; i<e.changedTouches.length; i++) {
+                            if(e.changedTouches[i].identifier === stateObj.id) touch = e.changedTouches[i];
+                        }
+                        if(!touch) return;
 
-                const endJoystick = (e) => {
-                    e.preventDefault();
-                    joystickActive = false;
-                    joystickId = null;
-                    knob.style.transform = `translate(-50%, -50%)`;
-                    input.forward = false; input.backward = false; input.left = false; input.right = false;
-                };
-                joystickZone.addEventListener('touchend', endJoystick);
-                joystickZone.addEventListener('touchcancel', endJoystick);
+                        const deltaX = touch.clientX - stateObj.startX;
+                        const deltaY = touch.clientY - stateObj.startY;
+                        
+                        const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
+                        const maxDist = 35; // Raio do joystick
+                        const clampedDist = Math.min(dist, maxDist);
+                        const angle = Math.atan2(deltaY, deltaX);
+                        
+                        // Visual
+                        const knobX = Math.cos(angle) * clampedDist;
+                        const knobY = Math.sin(angle) * clampedDist;
+                        knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
 
+                        // Output Normalizado (-1 a 1)
+                        const normX = knobX / maxDist;
+                        const normY = knobY / maxDist;
+
+                        if (zoneId === 'joystick-left') {
+                            stateObj.moveX = normX;
+                            stateObj.moveY = normY;
+                            // Atualiza inputs globais baseados no analógico
+                            input.forward = normY < -0.2;
+                            input.backward = normY > 0.2;
+                            input.left = normX < -0.2;
+                            input.right = normX > 0.2;
+                        } else {
+                            // Joystick Direito (Camera)
+                            stateObj.lookX = normX;
+                            stateObj.lookY = normY;
+                        }
+
+                    }, {passive: false});
+
+                    const endHandler = (e) => {
+                        e.preventDefault();
+                        let touch = null;
+                        for(let i=0; i<e.changedTouches.length; i++) {
+                            if(e.changedTouches[i].identifier === stateObj.id) touch = e.changedTouches[i];
+                        }
+                        if(!touch) return;
+
+                        stateObj.active = false;
+                        stateObj.id = null;
+                        stateObj.moveX = 0; stateObj.moveY = 0;
+                        stateObj.lookX = 0; stateObj.lookY = 0;
+                        
+                        knob.style.transform = `translate(-50%, -50%)`;
+                        
+                        if (zoneId === 'joystick-left') {
+                            input.forward = false; input.backward = false;
+                            input.left = false; input.right = false;
+                        }
+                    };
+                    zone.addEventListener('touchend', endHandler);
+                    zone.addEventListener('touchcancel', endHandler);
+                }
+
+                setupJoystick('joystick-left', 'knob-left', leftJoystick);
+                setupJoystick('joystick-right', 'knob-right', rightJoystick);
+
+                // Botões
                 const btnShoot = document.getElementById('shoot-btn');
                 btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); input.shoot = true; });
                 btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); input.shoot = false; });
@@ -523,58 +562,6 @@
                 btnJump.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
                 const btnReload = document.getElementById('reload-btn');
                 btnReload.addEventListener('touchstart', (e) => { e.preventDefault(); reload(); });
-
-                // --- Lógica de Mira Mobile Melhorada (Multitouch ID) ---
-                const lookZone = document.getElementById('touch-look-zone');
-                let lastLookX = 0;
-                let lastLookY = 0;
-
-                lookZone.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.changedTouches[0];
-                    // Se já não estamos rastreando um dedo de mira
-                    if (lookTouchId === null) {
-                        lookTouchId = touch.identifier;
-                        lastLookX = touch.clientX;
-                        lastLookY = touch.clientY;
-                    }
-                }, {passive: false});
-
-                lookZone.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (lookTouchId === null) return;
-
-                    // Encontrar o toque correto pelo ID
-                    let touch = null;
-                    for(let i = 0; i < e.changedTouches.length; i++) {
-                        if (e.changedTouches[i].identifier === lookTouchId) {
-                            touch = e.changedTouches[i];
-                            break;
-                        }
-                    }
-
-                    if (touch) {
-                        const dx = touch.clientX - lastLookX;
-                        const dy = touch.clientY - lastLookY;
-                        
-                        onMouseMove({ movementX: dx * 2.5, movementY: dy * 2.5 }); // Ajuste sensibilidade
-                        
-                        lastLookX = touch.clientX;
-                        lastLookY = touch.clientY;
-                    }
-                }, {passive: false});
-
-                const endLook = (e) => {
-                    e.preventDefault();
-                    for(let i = 0; i < e.changedTouches.length; i++) {
-                        if (e.changedTouches[i].identifier === lookTouchId) {
-                            lookTouchId = null; // Soltou o dedo da mira
-                            break;
-                        }
-                    }
-                };
-                lookZone.addEventListener('touchend', endLook);
-                lookZone.addEventListener('touchcancel', endLook);
             }
         }
 
@@ -595,6 +582,7 @@
             }
         }
 
+        // ... [Funções startGame, respawn, damagePlayer, die, shoot, createTracer, damageEnemy, reload, updateBots iguais] ...
         function startGame(className) {
             AudioSys.init();
             player.class = CLASSES[className];
@@ -619,7 +607,6 @@
             player.mesh = camera; 
             player.velocity.set(0,0,0);
             
-            // Ativa controles se for mobile
             if(isMobile) {
                 setControlsVisibility(true);
             } else {
@@ -635,18 +622,16 @@
             if (!gameActive) return;
             player.hp -= amount;
             lastDamageTime = performance.now(); 
-            
             const overlay = document.getElementById('damage-overlay');
             overlay.style.opacity = '0.5';
             setTimeout(() => overlay.style.opacity = '0', 100);
-
             updateHUD();
             if (player.hp <= 0) die(sourceName);
         }
 
         function die(killer) {
             gameActive = false;
-            setControlsVisibility(false); // Oculta controles mobile
+            setControlsVisibility(false);
             if(!isMobile) document.exitPointerLock();
             document.getElementById('killer-name').innerText = killer || "Desconhecido";
             document.getElementById('hud').classList.add('hidden');
@@ -658,25 +643,20 @@
                 if(player.ammo <= 0) reload();
                 return;
             }
-
             const now = performance.now();
             const fireInterval = 60000 / player.class.weapon.rpm;
-            
             if (now - lastShotTime > fireInterval) {
                 lastShotTime = now;
                 player.ammo--;
                 updateHUD();
-                
                 AudioSys.playShoot(player.class.name);
                 camera.rotation.x += 0.01;
                 const wpn = weaponMeshes[player.class.name.toLowerCase()];
                 if(wpn) wpn.position.z += 0.1;
-
                 const pellets = player.class.weapon.pellets || 1;
                 let hitAnything = false;
                 const targets = enemies.map(e => e.mesh.userData.hitbox).filter(h => h);
                 const walls = worldObjects;
-
                 for(let i = 0; i < pellets; i++) {
                     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
                     const spread = player.class.weapon.spread;
@@ -684,18 +664,14 @@
                     raycaster.ray.direction.y += (Math.random() - 0.5) * spread;
                     raycaster.ray.direction.z += (Math.random() - 0.5) * spread;
                     raycaster.ray.direction.normalize();
-
                     const hits = raycaster.intersectObjects(targets);
                     const wallHits = raycaster.intersectObjects(walls);
-                    
                     let hitDist = 1000;
                     let hitWall = false;
-
                     if(wallHits.length > 0) {
                         hitDist = wallHits[0].distance;
                         hitWall = true;
                     }
-
                     if (hits.length > 0 && hits[0].distance < hitDist) {
                         const enemy = enemies.find(e => e.mesh.userData.hitbox === hits[0].object);
                         if (enemy) {
@@ -709,7 +685,6 @@
                          if (pellets === 1) createTracer(new THREE.Vector3(0.2, -0.2, -0.5), raycaster.ray.direction.clone().multiplyScalar(50).add(camera.position));
                     }
                 }
-
                 if(hitAnything) { AudioSys.playHit(); showHitmarker(); }
             }
         }
@@ -783,6 +758,7 @@
         }
 
         function updatePhysics(delta) {
+            // Regen
             if (performance.now() - lastDamageTime > CONFIG.regenDelay && player.hp < 100 && player.hp > 0) {
                 player.hp += CONFIG.regenRate * delta;
                 if(player.hp > 100) player.hp = 100;
@@ -791,6 +767,15 @@
                 updateHUD();
             } else {
                 document.getElementById('regen-overlay').style.opacity = '0';
+            }
+
+            // --- CONTROLE DE MIRA PELO JOYSTICK DIREITO (Continuous Turn) ---
+            if (isMobile && rightJoystick.active) {
+                // Gira baseado na deflexão do joystick (X = Yaw, Y = Pitch)
+                camera.rotation.y -= rightJoystick.lookX * CONFIG.turnSpeedMobile * delta;
+                camera.rotation.x -= rightJoystick.lookY * CONFIG.turnSpeedMobile * delta;
+                // Clamp Pitch
+                camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x));
             }
 
             player.velocity.y -= CONFIG.gravity * delta;
