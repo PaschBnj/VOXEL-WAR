@@ -71,6 +71,25 @@
         #jump-btn { bottom: 130px; right: 140px; width: 60px; height: 60px; }
         #reload-btn { bottom: 40px; right: 200px; width: 50px; height: 50px; font-size: 16px; }
 
+        /* Inventário (Substitui Timer) */
+        .inventory-slot {
+            background: rgba(17, 24, 39, 0.85);
+            border: 2px solid #4B5563;
+            border-radius: 8px;
+            width: 60px; height: 60px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            margin: 0 4px;
+            position: relative;
+            pointer-events: auto; /* Clicável */
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .inventory-slot:active { transform: scale(0.95); border-color: #FBBF24; }
+        .inv-icon { font-size: 20px; margin-bottom: 2px; }
+        .inv-count { font-size: 10px; font-weight: bold; color: #FBBF24; position: absolute; bottom: 2px; right: 4px; }
+        .inv-key { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #9CA3AF; }
+
         @keyframes hitmarker {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
@@ -84,6 +103,8 @@
         .hit-active { animation: hitmarker 0.15s ease-out; }
         .damage-flash { position: absolute; inset: 0; background: red; opacity: 0; pointer-events: none; transition: opacity 0.1s; }
         .regen-flash { position: absolute; inset: 0; box-shadow: inset 0 0 50px #10B981; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+        .heal-flash { animation: healAnim 0.5s; }
+        @keyframes healAnim { 0% { opacity: 0.5; background-color: green; } 100% { opacity: 0; } }
         
         .scope-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 30%, black 35%); z-index: 5; pointer-events: none; }
         .scope-crosshair { position: absolute; top: 50%; left: 0; width: 100%; height: 1px; background: black; }
@@ -101,20 +122,37 @@
         <!-- HUD -->
         <div id="hud" class="hidden w-full h-full relative">
             
+            <!-- Kills (Esquerda) -->
             <div class="absolute top-4 left-4 p-2 md:p-4 bg-gray-900 bg-opacity-80 rounded-xl border-l-4 border-red-500 shadow-lg transform skew-x-[-10deg]">
                 <div class="text-[10px] md:text-xs text-gray-400 font-bold tracking-widest skew-x-[10deg]">KILLS</div>
                 <div class="text-2xl md:text-4xl font-black text-white skew-x-[10deg]" id="kill-display">0</div>
             </div>
 
-            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 text-center">
-                <div class="bg-gray-900 bg-opacity-80 px-4 py-1 md:px-6 md:py-2 rounded-b-xl border-t-4 border-yellow-500 shadow-lg">
-                    <div class="text-xl md:text-3xl font-black text-white" id="timer">05:00</div>
-                    <div class="text-[10px] text-gray-400 font-bold tracking-widest">TACTICAL</div>
+            <!-- INVENTÁRIO (Centro Topo) - Substitui Timer -->
+            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-start">
+                <!-- Arma -->
+                <div class="inventory-slot border-yellow-500 bg-gray-800">
+                    <div class="inv-icon">🔫</div>
+                    <div class="inv-count" id="inv-weapon-name">Rifle</div>
+                </div>
+                <!-- Kit Médico -->
+                <div class="inventory-slot" onclick="useItem('medkit')" ontouchstart="useItem('medkit')">
+                    <div class="inv-key">4</div>
+                    <div class="inv-icon">💊</div>
+                    <div class="inv-count" id="medkit-count">2</div>
+                </div>
+                <!-- Parede de Gelo -->
+                <div class="inventory-slot" onclick="useItem('gloo')" ontouchstart="useItem('gloo')">
+                    <div class="inv-key">5</div>
+                    <div class="inv-icon">🧊</div>
+                    <div class="inv-count" id="gloo-count">3</div>
                 </div>
             </div>
 
+            <!-- Kill Feed -->
             <div id="kill-feed" class="absolute top-16 right-4 flex flex-col items-end space-y-1 w-48 md:w-64"></div>
 
+            <!-- Mira -->
             <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                 <div id="crosshair-dot" class="w-1.5 h-1.5 bg-green-400 rounded-full shadow-[0_0_4px_#4ade80]"></div>
             </div>
@@ -147,39 +185,28 @@
 
         <!-- Mobile Controls (Dual Joystick) -->
         <div id="mobile-controls" class="ui-layer interactive">
-            <!-- Left Joystick (Movement) -->
-            <div id="joystick-left" class="joystick-base">
-                <div id="knob-left" class="joystick-knob"></div>
-            </div>
-            
-            <!-- Right Joystick (Aim/Look) -->
-            <div id="joystick-right" class="joystick-base">
-                <div id="knob-right" class="joystick-knob"></div>
-            </div>
-
-            <!-- Shoot Button (Also acts as Aim Touchpad) -->
+            <div id="joystick-left" class="joystick-base"><div id="knob-left" class="joystick-knob"></div></div>
+            <div id="joystick-right" class="joystick-base"><div id="knob-right" class="joystick-knob"></div></div>
             <div id="shoot-btn" class="action-btn">🔫</div>
-            
             <div id="jump-btn" class="action-btn">🦘</div>
             <div id="reload-btn" class="action-btn">🔄</div>
         </div>
 
-        <!-- Menu Principal (Z-Index 50) -->
+        <!-- Menus -->
         <div id="main-menu" class="interactive absolute inset-0 bg-gray-900 flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] z-50">
             <div class="absolute inset-0 bg-black bg-opacity-70"></div>
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.6: Fire Button Aim</p>
+                    <p class="text-gray-400 font-mono mb-8">v3.7: Gloo Wall Update</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
-                    <p class="mt-4 text-gray-500 text-xs md:text-sm">PC: WASD + Mouse | MOBILE: Dual Sticks + Drag Fire</p>
+                    <p class="mt-4 text-gray-500 text-xs md:text-sm">PC: 4/5 Items | MOBILE: Tap Inventory</p>
                 </div>
             </div>
         </div>
 
-        <!-- Seleção de Classe (Z-Index 50) -->
         <div id="class-select" class="interactive hidden absolute inset-0 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center p-4 z-50">
             <h2 class="text-3xl md:text-4xl font-black text-white mb-8 uppercase tracking-widest text-center">Escolha Classe</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl overflow-y-auto max-h-[80vh]">
@@ -242,18 +269,22 @@
             },
             playHit: function() { if (this.ctx) this.playTone(800, 'triangle', 0.1, 0.1); },
             playJump: function() { if (this.ctx) this.playTone(150, 'sine', 0.2, 0.1); },
-            playRegen: function() { if (this.ctx) this.playTone(400, 'sine', 0.1, 0.05); }
+            playRegen: function() { if (this.ctx) this.playTone(400, 'sine', 0.1, 0.05); },
+            playHeal: function() { if (this.ctx) this.playTone(600, 'sine', 0.5, 0.2); },
+            playGloo: function() { if (this.ctx) this.playTone(100, 'square', 0.2, 0.5); }
         };
 
         const CONFIG = {
             fov: 80,
             sensitivity: 0.002,
-            turnSpeedMobile: 2.5, // Velocidade de giro no mobile
+            turnSpeedMobile: 2.5,
             gravity: 30,
             jumpForce: 13,
             playerSpeed: 14,
             regenDelay: 15000, 
-            regenRate: 5 
+            regenRate: 5,
+            playerHeight: 1.6,
+            playerRadius: 0.5
         };
 
         const CLASSES = {
@@ -263,12 +294,14 @@
         };
 
         let scene, camera, renderer, weaponGroup;
-        let player = { mesh: null, velocity: new THREE.Vector3(), onGround: false, hp: 100, ammo: 30, isReloading: false, score: 0, kills: 0 };
+        // Adicionado inventário ao estado do player
+        let player = { mesh: null, velocity: new THREE.Vector3(), onGround: false, hp: 100, ammo: 30, isReloading: false, score: 0, kills: 0, inventory: { medkit: 2, gloo: 3 } };
         let input = { forward: false, backward: false, left: false, right: false, jump: false, shoot: false };
         let worldObjects = [], enemies = [];
         let lastTime = performance.now();
         let raycaster = new THREE.Raycaster();
         let moveRaycaster = new THREE.Raycaster();
+        let downRaycaster = new THREE.Raycaster(); // Novo raycaster para o chão
         let gameActive = false;
         let lastShotTime = 0;
         let weaponMeshes = {};
@@ -281,7 +314,7 @@
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x111827);
-            scene.fog = new THREE.Fog(0x111827, 10, 80);
+            scene.fog = new THREE.Fog(0x111827, 10, 100);
 
             camera = new THREE.PerspectiveCamera(CONFIG.fov, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.rotation.order = 'YXZ';
@@ -323,6 +356,7 @@
             animate();
         }
 
+        // ... [createWeaponModels mantido] ...
         function createWeaponModels() {
             const matDark = new THREE.MeshLambertMaterial({ color: 0x111111 });
             const matMetal = new THREE.MeshLambertMaterial({ color: 0x555555 });
@@ -364,9 +398,12 @@
             floor.receiveShadow = true;
             scene.add(floor);
             worldObjects.push(floor);
+
             const wallMat = new THREE.MeshLambertMaterial({ color: 0x9CA3AF });
             const boxMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
             const darkMat = new THREE.MeshLambertMaterial({ color: 0x1F2937 });
+            const bridgeMat = new THREE.MeshLambertMaterial({ color: 0x6B7280 }); // Cor da ponte
+
             function createBox(x, y, z, w, h, d, mat) {
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
                 mesh.position.set(x, y + h/2, z);
@@ -374,12 +411,25 @@
                 mesh.receiveShadow = true;
                 scene.add(mesh);
                 worldObjects.push(mesh);
+                return mesh; // Retornar para usar em referencias se precisar
             }
+
             createBox(0, 0, -60, 120, 10, 2, wallMat);
             createBox(0, 0, 60, 120, 10, 2, wallMat);
             createBox(-60, 0, 0, 2, 10, 120, wallMat);
             createBox(60, 0, 0, 2, 10, 120, wallMat);
-            createBox(0, 0, 0, 10, 4, 10, darkMat);
+
+            const centerBlock = createBox(0, 0, 0, 10, 4, 10, darkMat); // Bloco central
+            
+            // Ponte ligando o meio ao lado (solicitado)
+            const bridge = new THREE.Mesh(new THREE.BoxGeometry(25, 1, 4), bridgeMat);
+            bridge.position.set(15, 4, 0); // Conecta do centro (0,0) para direita (30,0)
+            // Rotacionar levemente para dar estilo ou reto? Reto é mais fácil de andar.
+            scene.add(bridge);
+            worldObjects.push(bridge);
+            // Plataforma na parede direita para receber a ponte
+            createBox(35, 0, 0, 10, 4, 10, darkMat);
+
             createBox(-40, 0, 0, 2, 6, 80, wallMat);
             createBox(-50, 0, -20, 4, 4, 4, boxMat);
             createBox(-50, 0, 20, 4, 4, 4, boxMat);
@@ -395,6 +445,7 @@
             createBox(-25, 0, -25, 3, 6, 3, darkMat);
         }
 
+        // ... [createCharacterMesh, spawnEnemy mantidos] ...
         function createCharacterMesh(color) {
             const group = new THREE.Group();
             const mat = new THREE.MeshLambertMaterial({ color: color });
@@ -446,7 +497,6 @@
         }
 
         function setupInputs() {
-            // PC Inputs
             document.addEventListener('keydown', (e) => {
                 if(e.code === 'KeyW') input.forward = true;
                 if(e.code === 'KeyS') input.backward = true;
@@ -454,6 +504,9 @@
                 if(e.code === 'KeyD') input.right = true;
                 if(e.code === 'Space') jump();
                 if(e.code === 'KeyR') reload();
+                // Atalhos de teclado para itens
+                if(e.code === 'Digit4') useItem('medkit');
+                if(e.code === 'Digit5') useItem('gloo');
             });
             document.addEventListener('keyup', (e) => {
                 if(e.code === 'KeyW') input.forward = false;
@@ -469,7 +522,6 @@
                 if(gameActive && !isMobile) document.getElementById('game-canvas').requestPointerLock();
             });
 
-            // MOBILE DUAL JOYSTICK SETUP
             if(isMobile) {
                 // Função helper para Joystick
                 function setupJoystick(zoneId, knobId, stateObj) {
@@ -499,29 +551,25 @@
                         const deltaY = touch.clientY - stateObj.startY;
                         
                         const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
-                        const maxDist = 35; // Raio do joystick
+                        const maxDist = 35;
                         const clampedDist = Math.min(dist, maxDist);
                         const angle = Math.atan2(deltaY, deltaX);
                         
-                        // Visual
                         const knobX = Math.cos(angle) * clampedDist;
                         const knobY = Math.sin(angle) * clampedDist;
                         knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
 
-                        // Output Normalizado (-1 a 1)
                         const normX = knobX / maxDist;
                         const normY = knobY / maxDist;
 
                         if (zoneId === 'joystick-left') {
                             stateObj.moveX = normX;
                             stateObj.moveY = normY;
-                            // Atualiza inputs globais baseados no analógico
                             input.forward = normY < -0.2;
                             input.backward = normY > 0.2;
                             input.left = normX < -0.2;
                             input.right = normX > 0.2;
                         } else {
-                            // Joystick Direito (Camera)
                             stateObj.lookX = normX;
                             stateObj.lookY = normY;
                         }
@@ -555,13 +603,11 @@
                 setupJoystick('joystick-left', 'knob-left', leftJoystick);
                 setupJoystick('joystick-right', 'knob-right', rightJoystick);
 
-                // Botões
                 const btnJump = document.getElementById('jump-btn');
                 btnJump.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
                 const btnReload = document.getElementById('reload-btn');
                 btnReload.addEventListener('touchstart', (e) => { e.preventDefault(); reload(); });
 
-                // --- Lógica de Botão de Tiro com Mira (Touchpad Style) ---
                 const btnShoot = document.getElementById('shoot-btn');
                 let shootTouchId = null;
                 let lastShootX = 0;
@@ -590,10 +636,7 @@
                     if (touch) {
                         const dx = touch.clientX - lastShootX;
                         const dy = touch.clientY - lastShootY;
-                        
-                        // Sensibilidade ao mirar enquanto atira
                         onMouseMove({ movementX: dx * 2.5, movementY: dy * 2.5 }); 
-                        
                         lastShootX = touch.clientX;
                         lastShootY = touch.clientY;
                     }
@@ -631,7 +674,41 @@
             }
         }
 
-        // ... [Funções startGame, respawn, damagePlayer, die, shoot, createTracer, damageEnemy, reload, updateBots iguais] ...
+        // --- SISTEMA DE ITENS ---
+        window.useItem = function(type) { // Global para funcionar no onclick
+            if (!gameActive) return;
+            if (type === 'medkit') {
+                if (player.inventory.medkit > 0 && player.hp < 100) {
+                    player.inventory.medkit--;
+                    player.hp = Math.min(100, player.hp + 40);
+                    AudioSys.playHeal();
+                    // Feedback visual
+                    document.getElementById('damage-overlay').classList.add('heal-flash');
+                    setTimeout(() => document.getElementById('damage-overlay').classList.remove('heal-flash'), 500);
+                    updateHUD();
+                }
+            } else if (type === 'gloo') {
+                if (player.inventory.gloo > 0) {
+                    player.inventory.gloo--;
+                    AudioSys.playGloo();
+                    // Spawnar Parede de Gelo na frente
+                    const dist = 3;
+                    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                    dir.y = 0; dir.normalize();
+                    const pos = camera.position.clone().add(dir.multiplyScalar(dist));
+                    
+                    const glooGeo = new THREE.BoxGeometry(4, 2.5, 0.5);
+                    const glooMat = new THREE.MeshLambertMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.8 });
+                    const gloo = new THREE.Mesh(glooGeo, glooMat);
+                    gloo.position.set(pos.x, pos.y, pos.z);
+                    gloo.lookAt(camera.position.x, gloo.position.y, camera.position.z); // Vira pra vc
+                    scene.add(gloo);
+                    worldObjects.push(gloo);
+                    updateHUD();
+                }
+            }
+        }
+
         function startGame(className) {
             AudioSys.init();
             player.class = CLASSES[className];
@@ -639,10 +716,15 @@
             player.ammo = player.class.weapon.mag;
             player.score = 0;
             player.kills = 0;
+            player.inventory = { medkit: 2, gloo: 3 }; // Reset inventory
             lastDamageTime = performance.now();
             
             Object.values(weaponMeshes).forEach(m => m.visible = false);
             if(weaponMeshes[className]) weaponMeshes[className].visible = true;
+
+            // Atualizar nome da arma no UI
+            document.getElementById('inv-weapon-name').innerText = player.class.weapon.name;
+            document.getElementById('weapon-display').innerText = player.class.weapon.name;
 
             updateHUD();
             document.getElementById('main-menu').classList.add('hidden');
@@ -705,6 +787,7 @@
                 const pellets = player.class.weapon.pellets || 1;
                 let hitAnything = false;
                 const targets = enemies.map(e => e.mesh.userData.hitbox).filter(h => h);
+                // Tiro colide com todos os objetos do mundo (incluindo Gloo Walls)
                 const walls = worldObjects;
                 for(let i = 0; i < pellets; i++) {
                     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -806,6 +889,7 @@
             });
         }
 
+        // --- FÍSICA ATUALIZADA (COLISÃO VERTICAL REAL) ---
         function updatePhysics(delta) {
             // Regen
             if (performance.now() - lastDamageTime > CONFIG.regenDelay && player.hp < 100 && player.hp > 0) {
@@ -818,17 +902,17 @@
                 document.getElementById('regen-overlay').style.opacity = '0';
             }
 
-            // --- CONTROLE DE MIRA PELO JOYSTICK DIREITO (Continuous Turn) ---
+            // Mira Joystick
             if (isMobile && rightJoystick.active) {
-                // Gira baseado na deflexão do joystick (X = Yaw, Y = Pitch)
                 camera.rotation.y -= rightJoystick.lookX * CONFIG.turnSpeedMobile * delta;
                 camera.rotation.x -= rightJoystick.lookY * CONFIG.turnSpeedMobile * delta;
-                // Clamp Pitch
                 camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x));
             }
 
+            // Gravidade e Pulo
             player.velocity.y -= CONFIG.gravity * delta;
             
+            // Movimento Horizontal
             const speed = CONFIG.playerSpeed;
             let moveX = 0, moveZ = 0;
 
@@ -840,24 +924,49 @@
             const euler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
             const vec = new THREE.Vector3(moveX, 0, moveZ).applyEuler(euler);
             
+            // Colisão Horizontal Simples (Parede)
             if(vec.lengthSq() > 0) {
                 moveRaycaster.set(camera.position, vec.clone().normalize());
+                // Raycast na altura do corpo (não pés)
                 const hits = moveRaycaster.intersectObjects(worldObjects);
                 if(hits.length > 0 && hits[0].distance < 1) {
                     vec.set(0,0,0);
                 }
             }
-
             camera.position.add(vec);
 
-            if(camera.position.y + player.velocity.y * delta < 1.6) {
-                player.velocity.y = 0;
-                player.onGround = true;
-                camera.position.y = 1.6;
+            // --- COLISÃO VERTICAL REAL ---
+            // Verifica o que está abaixo dos pés
+            downRaycaster.set(camera.position, new THREE.Vector3(0, -1, 0));
+            const downHits = downRaycaster.intersectObjects(worldObjects);
+            
+            let groundHeight = -100; // Padrão se não achar nada (cair no void)
+            
+            if (downHits.length > 0) {
+                // O ponto de colisão + altura do jogador (1.6) é onde a câmera deve estar se estivermos no chão
+                const hitY = downHits[0].point.y;
+                const distToGround = camera.position.y - hitY;
+                
+                // Se estivermos caindo e perto do chão, ou já no chão
+                if (distToGround < 1.7 && player.velocity.y <= 0) {
+                    groundHeight = hitY + 1.6;
+                    player.velocity.y = 0;
+                    player.onGround = true;
+                    camera.position.y = groundHeight;
+                } else {
+                    player.onGround = false;
+                }
             } else {
                 player.onGround = false;
             }
-            camera.position.y += player.velocity.y * delta;
+
+            // Aplica velocidade vertical se não estiver travado no chão
+            if (!player.onGround) {
+                camera.position.y += player.velocity.y * delta;
+            }
+            
+            // Morte por queda
+            if(camera.position.y < -20) { player.hp = 0; die("Void"); }
 
             const wpn = weaponMeshes[player.class.name.toLowerCase()];
             if(wpn && wpn.position.z > -0.5) wpn.position.z -= delta;
@@ -886,6 +995,8 @@
             document.getElementById('hp-bar').style.width = Math.max(0, player.hp) + '%';
             document.getElementById('ammo-display').innerText = player.ammo;
             document.getElementById('kill-display').innerText = player.kills;
+            document.getElementById('medkit-count').innerText = player.inventory.medkit;
+            document.getElementById('gloo-count').innerText = player.inventory.gloo;
         }
         function showHitmarker() {
             const el = document.getElementById('hitmarker-el');
