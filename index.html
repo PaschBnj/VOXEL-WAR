@@ -215,7 +215,7 @@
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.9: Item Touch Fix</p>
+                    <p class="text-gray-400 font-mono mb-8">v4.0: Enemy AI & Collision Fix</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
@@ -887,34 +887,86 @@
 
         function updateBots(delta) {
             enemies.forEach(bot => {
-                const dist = bot.mesh.position.distanceTo(player.mesh.position);
-                if(dist < 30) {
-                    bot.mesh.lookAt(player.mesh.position.x, bot.mesh.position.y, player.mesh.position.z);
-                    bot.mesh.translateZ(3 * delta);
-                    const now = performance.now();
-                    if(now - bot.lastShot > 1500) {
-                        bot.lastShot = now;
-                        moveRaycaster.set(bot.mesh.position, new THREE.Vector3().subVectors(player.mesh.position, bot.mesh.position).normalize());
-                        const hits = moveRaycaster.intersectObjects(worldObjects);
-                        if(hits.length === 0 || hits[0].distance > dist) {
-                            AudioSys.playShoot('Assault');
-                            if(Math.random() < 0.3) damagePlayer(10, "Bot");
+                let closest = null;
+                let minDist = 150; 
+                const shootRange = 60;
+
+                const distPlayer = bot.mesh.position.distanceTo(player.mesh.position);
+                if (distPlayer < minDist) {
+                    closest = { pos: player.mesh.position, type: 'player', obj: player, dist: distPlayer };
+                    minDist = distPlayer;
+                }
+
+                enemies.forEach(other => {
+                    if (other === bot) return;
+                    const d = bot.mesh.position.distanceTo(other.mesh.position);
+                    if (d < minDist) {
+                        closest = { pos: other.mesh.position, type: 'bot', obj: other, dist: d };
+                        minDist = d;
+                    }
+                });
+
+                bot.target = closest;
+                const speed = 4 * delta;
+                
+                const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(bot.mesh.quaternion);
+                moveRaycaster.set(bot.mesh.position, fwd);
+                const wallHits = moveRaycaster.intersectObjects(worldObjects);
+                let wallAhead = false;
+                if(wallHits.length > 0 && wallHits[0].distance < 2) {
+                    wallAhead = true;
+                }
+
+                if (bot.target) {
+                    bot.mesh.lookAt(bot.target.pos.x, bot.mesh.position.y, bot.target.pos.z);
+                    
+                    if (!wallAhead) {
+                        if (bot.target.dist > 10) {
+                            bot.mesh.translateZ(speed);
+                        } else {
+                            bot.mesh.translateX(Math.sin(Date.now() * 0.005) * speed);
                         }
                     }
+
+                    const now = performance.now();
+                    if (bot.target.dist < shootRange && now - bot.lastShot > 1500) { 
+                        bot.lastShot = now;
+                        const shootDir = new THREE.Vector3().subVectors(bot.target.pos, bot.mesh.position).normalize();
+                        moveRaycaster.set(bot.mesh.position, shootDir);
+                        const hits = moveRaycaster.intersectObjects(worldObjects);
+                        
+                        if(hits.length === 0 || hits[0].distance > bot.target.dist) {
+                            AudioSys.playShoot('Assault');
+                            if (bot.target.type === 'player') {
+                               if(Math.random() < 0.3) damagePlayer(10, bot.name);
+                            } else {
+                               if(Math.random() < 0.3) damageEnemy(bot.target.obj, 10, bot.name);
+                            }
+                        }
+                    }
+
                 } else {
                     bot.changeDirTimer -= delta;
-                    if(bot.changeDirTimer <= 0) {
-                        bot.moveDir.set(Math.random()-0.5, 0, Math.random()-0.5).normalize();
+                    if (wallAhead || bot.changeDirTimer <= 0) {
+                        const angle = wallAhead ? Math.PI + (Math.random()-0.5) : (Math.random()-0.5)*2;
+                        bot.moveDir.applyAxisAngle(new THREE.Vector3(0,1,0), angle);
                         bot.changeDirTimer = 3;
                     }
-                    bot.mesh.lookAt(bot.mesh.position.x + bot.moveDir.x, bot.mesh.position.y, bot.mesh.position.z + bot.moveDir.z);
-                    bot.mesh.translateZ(2 * delta);
+                    
+                    const patrolFwd = bot.moveDir.clone();
+                    moveRaycaster.set(bot.mesh.position, patrolFwd);
+                    const patrolHits = moveRaycaster.intersectObjects(worldObjects);
+                    
+                    if (patrolHits.length === 0 || patrolHits[0].distance > 2) {
+                        const targetLook = bot.mesh.position.clone().add(bot.moveDir);
+                        bot.mesh.lookAt(targetLook.x, bot.mesh.position.y, targetLook.z);
+                        bot.mesh.translateZ(speed * 0.6);
+                    }
                 }
             });
         }
 
         function updatePhysics(delta) {
-            // Regen
             if (performance.now() - lastDamageTime > CONFIG.regenDelay && player.hp < 100 && player.hp > 0) {
                 player.hp += CONFIG.regenRate * delta;
                 if(player.hp > 100) player.hp = 100;
@@ -925,17 +977,14 @@
                 document.getElementById('regen-overlay').style.opacity = '0';
             }
 
-            // Mira Joystick
             if (isMobile && rightJoystick.active) {
                 camera.rotation.y -= rightJoystick.lookX * CONFIG.turnSpeedMobile * delta;
                 camera.rotation.x -= rightJoystick.lookY * CONFIG.turnSpeedMobile * delta;
                 camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x));
             }
 
-            // Gravidade e Pulo
             player.velocity.y -= CONFIG.gravity * delta;
             
-            // Movimento Horizontal
             const speed = CONFIG.playerSpeed;
             let moveX = 0, moveZ = 0;
 
@@ -947,10 +996,8 @@
             const euler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
             const vec = new THREE.Vector3(moveX, 0, moveZ).applyEuler(euler);
             
-            // Colisão Horizontal Simples (Parede)
             if(vec.lengthSq() > 0) {
                 moveRaycaster.set(camera.position, vec.clone().normalize());
-                // Raycast na altura do corpo (não pés)
                 const hits = moveRaycaster.intersectObjects(worldObjects);
                 if(hits.length > 0 && hits[0].distance < 1) {
                     vec.set(0,0,0);
@@ -958,19 +1005,15 @@
             }
             camera.position.add(vec);
 
-            // --- COLISÃO VERTICAL REAL ---
-            // Verifica o que está abaixo dos pés
             downRaycaster.set(camera.position, new THREE.Vector3(0, -1, 0));
             const downHits = downRaycaster.intersectObjects(worldObjects);
             
-            let groundHeight = -100; // Padrão se não achar nada (cair no void)
+            let groundHeight = -100;
             
             if (downHits.length > 0) {
-                // O ponto de colisão + altura do jogador (1.6) é onde a câmera deve estar se estivermos no chão
                 const hitY = downHits[0].point.y;
                 const distToGround = camera.position.y - hitY;
                 
-                // Se estivermos caindo e perto do chão, ou já no chão
                 if (distToGround < 1.7 && player.velocity.y <= 0) {
                     groundHeight = hitY + 1.6;
                     player.velocity.y = 0;
@@ -983,12 +1026,10 @@
                 player.onGround = false;
             }
 
-            // Aplica velocidade vertical se não estiver travado no chão
             if (!player.onGround) {
                 camera.position.y += player.velocity.y * delta;
             }
             
-            // Morte por queda
             if(camera.position.y < -20) { player.hp = 0; die("Void"); }
 
             const wpn = weaponMeshes[player.class.name.toLowerCase()];
@@ -1004,7 +1045,7 @@
             if (gameActive) {
                 updatePhysics(delta);
                 updateBots(delta);
-                updateCooldownUI(); // Atualiza UI a cada frame
+                updateCooldownUI();
                 if (input.shoot && player.class.weapon.auto) shoot();
                 else if (input.shoot && !player.class.weapon.auto && !input.hasShot) { shoot(); input.hasShot = true; }
                 if (!input.shoot) input.hasShot = false;
