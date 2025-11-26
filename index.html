@@ -142,14 +142,14 @@
             </div>
 
             <!-- INVENTÁRIO (Centro Topo) -->
-            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-start pointer-events-auto">
+            <!-- Z-INDEX AUMENTADO para garantir prioridade de toque -->
+            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-start pointer-events-auto z-50">
                 <!-- Arma -->
                 <div class="inventory-slot border-yellow-500 bg-gray-800">
                     <div class="inv-icon">🔫</div>
                     <div class="inv-count" id="inv-weapon-name">Rifle</div>
                 </div>
                 <!-- Kit Médico (5s Cooldown) -->
-                <!-- onmousedown para PC e ontouchstart para Mobile com stopPropagation -->
                 <div id="slot-medkit" class="inventory-slot" onmousedown="useItem('medkit', event)" ontouchstart="useItem('medkit', event)">
                     <div class="inv-key">4</div>
                     <div class="inv-icon">💊</div>
@@ -200,7 +200,8 @@
         </div>
 
         <!-- Mobile Controls (Dual Joystick) -->
-        <div id="mobile-controls" class="ui-layer interactive">
+        <!-- REMOVIDO 'interactive' do container principal para permitir toques no HUD atrás dele -->
+        <div id="mobile-controls" class="ui-layer">
             <div id="joystick-left" class="joystick-base"><div id="knob-left" class="joystick-knob"></div></div>
             <div id="joystick-right" class="joystick-base"><div id="knob-right" class="joystick-knob"></div></div>
             <div id="shoot-btn" class="action-btn">🔫</div>
@@ -214,7 +215,7 @@
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.8: Infinite Items & Cooldowns</p>
+                    <p class="text-gray-400 font-mono mb-8">v3.9: Item Touch Fix</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
