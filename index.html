@@ -81,14 +81,27 @@
             align-items: center; justify-content: center;
             margin: 0 4px;
             position: relative;
-            pointer-events: auto; /* Clicável */
+            pointer-events: auto; /* CRÍTICO PARA O TOUCH */
             cursor: pointer;
             transition: all 0.2s;
+            overflow: hidden;
         }
         .inventory-slot:active { transform: scale(0.95); border-color: #FBBF24; }
-        .inv-icon { font-size: 20px; margin-bottom: 2px; }
-        .inv-count { font-size: 10px; font-weight: bold; color: #FBBF24; position: absolute; bottom: 2px; right: 4px; }
-        .inv-key { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #9CA3AF; }
+        .inventory-slot.on-cooldown { border-color: #EF4444; opacity: 0.7; }
+        
+        .inv-icon { font-size: 20px; margin-bottom: 2px; z-index: 2; }
+        /* Indicador de infinito ou timer */
+        .inv-count { 
+            font-size: 10px; font-weight: bold; color: #FBBF24; 
+            position: absolute; bottom: 2px; right: 4px; z-index: 2; 
+        }
+        .inv-timer {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 900; color: rgba(255,255,255,0.8); text-shadow: 0 2px 4px black;
+            background: rgba(0,0,0,0.5); z-index: 3;
+            display: none; /* Mostrado via JS */
+        }
+        .inv-key { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #9CA3AF; z-index: 2; }
 
         @keyframes hitmarker {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
@@ -128,24 +141,27 @@
                 <div class="text-2xl md:text-4xl font-black text-white skew-x-[10deg]" id="kill-display">0</div>
             </div>
 
-            <!-- INVENTÁRIO (Centro Topo) - Substitui Timer -->
-            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-start">
+            <!-- INVENTÁRIO (Centro Topo) -->
+            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-start pointer-events-auto">
                 <!-- Arma -->
                 <div class="inventory-slot border-yellow-500 bg-gray-800">
                     <div class="inv-icon">🔫</div>
                     <div class="inv-count" id="inv-weapon-name">Rifle</div>
                 </div>
-                <!-- Kit Médico -->
-                <div class="inventory-slot" onclick="useItem('medkit')" ontouchstart="useItem('medkit')">
+                <!-- Kit Médico (5s Cooldown) -->
+                <!-- onmousedown para PC e ontouchstart para Mobile com stopPropagation -->
+                <div id="slot-medkit" class="inventory-slot" onmousedown="useItem('medkit', event)" ontouchstart="useItem('medkit', event)">
                     <div class="inv-key">4</div>
                     <div class="inv-icon">💊</div>
-                    <div class="inv-count" id="medkit-count">2</div>
+                    <div class="inv-count">∞</div>
+                    <div id="timer-medkit" class="inv-timer">5</div>
                 </div>
-                <!-- Parede de Gelo -->
-                <div class="inventory-slot" onclick="useItem('gloo')" ontouchstart="useItem('gloo')">
+                <!-- Parede de Gelo (7s Cooldown) -->
+                <div id="slot-gloo" class="inventory-slot" onmousedown="useItem('gloo', event)" ontouchstart="useItem('gloo', event)">
                     <div class="inv-key">5</div>
                     <div class="inv-icon">🧊</div>
-                    <div class="inv-count" id="gloo-count">3</div>
+                    <div class="inv-count">∞</div>
+                    <div id="timer-gloo" class="inv-timer">7</div>
                 </div>
             </div>
 
@@ -198,7 +214,7 @@
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.7: Gloo Wall Update</p>
+                    <p class="text-gray-400 font-mono mb-8">v3.8: Infinite Items & Cooldowns</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
@@ -284,7 +300,9 @@
             regenDelay: 15000, 
             regenRate: 5,
             playerHeight: 1.6,
-            playerRadius: 0.5
+            playerRadius: 0.5,
+            medkitCooldown: 5000,
+            glooCooldown: 7000
         };
 
         const CLASSES = {
@@ -294,14 +312,17 @@
         };
 
         let scene, camera, renderer, weaponGroup;
-        // Adicionado inventário ao estado do player
-        let player = { mesh: null, velocity: new THREE.Vector3(), onGround: false, hp: 100, ammo: 30, isReloading: false, score: 0, kills: 0, inventory: { medkit: 2, gloo: 3 } };
+        // Modificado para armazenar timestamps de uso
+        let player = { 
+            mesh: null, velocity: new THREE.Vector3(), onGround: false, hp: 100, ammo: 30, isReloading: false, score: 0, kills: 0, 
+            cooldowns: { medkit: 0, gloo: 0 } 
+        };
         let input = { forward: false, backward: false, left: false, right: false, jump: false, shoot: false };
         let worldObjects = [], enemies = [];
         let lastTime = performance.now();
         let raycaster = new THREE.Raycaster();
         let moveRaycaster = new THREE.Raycaster();
-        let downRaycaster = new THREE.Raycaster(); // Novo raycaster para o chão
+        let downRaycaster = new THREE.Raycaster(); 
         let gameActive = false;
         let lastShotTime = 0;
         let weaponMeshes = {};
@@ -356,7 +377,7 @@
             animate();
         }
 
-        // ... [createWeaponModels mantido] ...
+        // ... [createWeaponModels, generateMap, createCharacterMesh, spawnEnemy, setupInputs, onMouseMove, jump - Mantidos iguais] ...
         function createWeaponModels() {
             const matDark = new THREE.MeshLambertMaterial({ color: 0x111111 });
             const matMetal = new THREE.MeshLambertMaterial({ color: 0x555555 });
@@ -398,12 +419,10 @@
             floor.receiveShadow = true;
             scene.add(floor);
             worldObjects.push(floor);
-
             const wallMat = new THREE.MeshLambertMaterial({ color: 0x9CA3AF });
             const boxMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
             const darkMat = new THREE.MeshLambertMaterial({ color: 0x1F2937 });
-            const bridgeMat = new THREE.MeshLambertMaterial({ color: 0x6B7280 }); // Cor da ponte
-
+            const bridgeMat = new THREE.MeshLambertMaterial({ color: 0x6B7280 });
             function createBox(x, y, z, w, h, d, mat) {
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
                 mesh.position.set(x, y + h/2, z);
@@ -411,25 +430,18 @@
                 mesh.receiveShadow = true;
                 scene.add(mesh);
                 worldObjects.push(mesh);
-                return mesh; // Retornar para usar em referencias se precisar
+                return mesh;
             }
-
             createBox(0, 0, -60, 120, 10, 2, wallMat);
             createBox(0, 0, 60, 120, 10, 2, wallMat);
             createBox(-60, 0, 0, 2, 10, 120, wallMat);
             createBox(60, 0, 0, 2, 10, 120, wallMat);
-
-            const centerBlock = createBox(0, 0, 0, 10, 4, 10, darkMat); // Bloco central
-            
-            // Ponte ligando o meio ao lado (solicitado)
+            createBox(0, 0, 0, 10, 4, 10, darkMat);
             const bridge = new THREE.Mesh(new THREE.BoxGeometry(25, 1, 4), bridgeMat);
-            bridge.position.set(15, 4, 0); // Conecta do centro (0,0) para direita (30,0)
-            // Rotacionar levemente para dar estilo ou reto? Reto é mais fácil de andar.
+            bridge.position.set(15, 4, 0); 
             scene.add(bridge);
             worldObjects.push(bridge);
-            // Plataforma na parede direita para receber a ponte
             createBox(35, 0, 0, 10, 4, 10, darkMat);
-
             createBox(-40, 0, 0, 2, 6, 80, wallMat);
             createBox(-50, 0, -20, 4, 4, 4, boxMat);
             createBox(-50, 0, 20, 4, 4, 4, boxMat);
@@ -445,7 +457,6 @@
             createBox(-25, 0, -25, 3, 6, 3, darkMat);
         }
 
-        // ... [createCharacterMesh, spawnEnemy mantidos] ...
         function createCharacterMesh(color) {
             const group = new THREE.Group();
             const mat = new THREE.MeshLambertMaterial({ color: color });
@@ -504,7 +515,6 @@
                 if(e.code === 'KeyD') input.right = true;
                 if(e.code === 'Space') jump();
                 if(e.code === 'KeyR') reload();
-                // Atalhos de teclado para itens
                 if(e.code === 'Digit4') useItem('medkit');
                 if(e.code === 'Digit5') useItem('gloo');
             });
@@ -523,11 +533,9 @@
             });
 
             if(isMobile) {
-                // Função helper para Joystick
                 function setupJoystick(zoneId, knobId, stateObj) {
                     const zone = document.getElementById(zoneId);
                     const knob = document.getElementById(knobId);
-                    
                     zone.addEventListener('touchstart', (e) => {
                         e.preventDefault();
                         const touch = e.changedTouches[0];
@@ -536,32 +544,25 @@
                         stateObj.startX = touch.clientX;
                         stateObj.startY = touch.clientY;
                     }, {passive: false});
-
                     zone.addEventListener('touchmove', (e) => {
                         e.preventDefault();
                         if(!stateObj.active) return;
-                        
                         let touch = null;
                         for(let i=0; i<e.changedTouches.length; i++) {
                             if(e.changedTouches[i].identifier === stateObj.id) touch = e.changedTouches[i];
                         }
                         if(!touch) return;
-
                         const deltaX = touch.clientX - stateObj.startX;
                         const deltaY = touch.clientY - stateObj.startY;
-                        
                         const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
                         const maxDist = 35;
                         const clampedDist = Math.min(dist, maxDist);
                         const angle = Math.atan2(deltaY, deltaX);
-                        
                         const knobX = Math.cos(angle) * clampedDist;
                         const knobY = Math.sin(angle) * clampedDist;
                         knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-
                         const normX = knobX / maxDist;
                         const normY = knobY / maxDist;
-
                         if (zoneId === 'joystick-left') {
                             stateObj.moveX = normX;
                             stateObj.moveY = normY;
@@ -573,9 +574,7 @@
                             stateObj.lookX = normX;
                             stateObj.lookY = normY;
                         }
-
                     }, {passive: false});
-
                     const endHandler = (e) => {
                         e.preventDefault();
                         let touch = null;
@@ -583,14 +582,11 @@
                             if(e.changedTouches[i].identifier === stateObj.id) touch = e.changedTouches[i];
                         }
                         if(!touch) return;
-
                         stateObj.active = false;
                         stateObj.id = null;
                         stateObj.moveX = 0; stateObj.moveY = 0;
                         stateObj.lookX = 0; stateObj.lookY = 0;
-                        
                         knob.style.transform = `translate(-50%, -50%)`;
-                        
                         if (zoneId === 'joystick-left') {
                             input.forward = false; input.backward = false;
                             input.left = false; input.right = false;
@@ -599,7 +595,6 @@
                     zone.addEventListener('touchend', endHandler);
                     zone.addEventListener('touchcancel', endHandler);
                 }
-
                 setupJoystick('joystick-left', 'knob-left', leftJoystick);
                 setupJoystick('joystick-right', 'knob-right', rightJoystick);
 
@@ -612,7 +607,6 @@
                 let shootTouchId = null;
                 let lastShootX = 0;
                 let lastShootY = 0;
-
                 btnShoot.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     input.shoot = true;
@@ -621,11 +615,9 @@
                     lastShootX = touch.clientX;
                     lastShootY = touch.clientY;
                 }, {passive: false});
-
                 btnShoot.addEventListener('touchmove', (e) => {
                     e.preventDefault();
                     if (!input.shoot) return; 
-
                     let touch = null;
                     for(let i=0; i<e.changedTouches.length; i++) {
                         if(e.changedTouches[i].identifier === shootTouchId) {
@@ -641,7 +633,6 @@
                         lastShootY = touch.clientY;
                     }
                 }, {passive: false});
-
                 const endShoot = (e) => {
                     e.preventDefault();
                     for(let i=0; i<e.changedTouches.length; i++) {
@@ -674,38 +665,72 @@
             }
         }
 
-        // --- SISTEMA DE ITENS ---
-        window.useItem = function(type) { // Global para funcionar no onclick
+        // --- SISTEMA DE ITENS ATUALIZADO ---
+        window.useItem = function(type, event) { 
+            if(event) event.stopPropagation(); // Crítico para o touch
             if (!gameActive) return;
+            
+            const now = Date.now();
+
             if (type === 'medkit') {
-                if (player.inventory.medkit > 0 && player.hp < 100) {
-                    player.inventory.medkit--;
-                    player.hp = Math.min(100, player.hp + 40);
-                    AudioSys.playHeal();
-                    // Feedback visual
-                    document.getElementById('damage-overlay').classList.add('heal-flash');
-                    setTimeout(() => document.getElementById('damage-overlay').classList.remove('heal-flash'), 500);
-                    updateHUD();
+                if (now - player.cooldowns.medkit >= CONFIG.medkitCooldown) {
+                    if (player.hp < 100) {
+                        player.hp = Math.min(100, player.hp + 40);
+                        player.cooldowns.medkit = now;
+                        AudioSys.playHeal();
+                        document.getElementById('damage-overlay').classList.add('heal-flash');
+                        setTimeout(() => document.getElementById('damage-overlay').classList.remove('heal-flash'), 500);
+                    }
                 }
             } else if (type === 'gloo') {
-                if (player.inventory.gloo > 0) {
-                    player.inventory.gloo--;
+                if (now - player.cooldowns.gloo >= CONFIG.glooCooldown) {
+                    player.cooldowns.gloo = now;
                     AudioSys.playGloo();
-                    // Spawnar Parede de Gelo na frente
                     const dist = 3;
                     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
                     dir.y = 0; dir.normalize();
                     const pos = camera.position.clone().add(dir.multiplyScalar(dist));
-                    
                     const glooGeo = new THREE.BoxGeometry(4, 2.5, 0.5);
                     const glooMat = new THREE.MeshLambertMaterial({ color: 0x3B82F6, transparent: true, opacity: 0.8 });
                     const gloo = new THREE.Mesh(glooGeo, glooMat);
                     gloo.position.set(pos.x, pos.y, pos.z);
-                    gloo.lookAt(camera.position.x, gloo.position.y, camera.position.z); // Vira pra vc
+                    gloo.lookAt(camera.position.x, gloo.position.y, camera.position.z);
                     scene.add(gloo);
                     worldObjects.push(gloo);
-                    updateHUD();
                 }
+            }
+            updateHUD(); // Update instantâneo (embora animate cuide do timer)
+        }
+
+        function updateCooldownUI() {
+            const now = Date.now();
+            
+            // Medkit UI
+            const medRem = Math.max(0, Math.ceil((CONFIG.medkitCooldown - (now - player.cooldowns.medkit)) / 1000));
+            const medSlot = document.getElementById('slot-medkit');
+            const medTimer = document.getElementById('timer-medkit');
+            
+            if(medRem > 0) {
+                medSlot.classList.add('on-cooldown');
+                medTimer.style.display = 'flex';
+                medTimer.innerText = medRem;
+            } else {
+                medSlot.classList.remove('on-cooldown');
+                medTimer.style.display = 'none';
+            }
+
+            // Gloo UI
+            const glooRem = Math.max(0, Math.ceil((CONFIG.glooCooldown - (now - player.cooldowns.gloo)) / 1000));
+            const glooSlot = document.getElementById('slot-gloo');
+            const glooTimer = document.getElementById('timer-gloo');
+
+            if(glooRem > 0) {
+                glooSlot.classList.add('on-cooldown');
+                glooTimer.style.display = 'flex';
+                glooTimer.innerText = glooRem;
+            } else {
+                glooSlot.classList.remove('on-cooldown');
+                glooTimer.style.display = 'none';
             }
         }
 
@@ -716,13 +741,12 @@
             player.ammo = player.class.weapon.mag;
             player.score = 0;
             player.kills = 0;
-            player.inventory = { medkit: 2, gloo: 3 }; // Reset inventory
+            player.cooldowns = { medkit: 0, gloo: 0 }; // Reset cooldowns
             lastDamageTime = performance.now();
             
             Object.values(weaponMeshes).forEach(m => m.visible = false);
             if(weaponMeshes[className]) weaponMeshes[className].visible = true;
 
-            // Atualizar nome da arma no UI
             document.getElementById('inv-weapon-name').innerText = player.class.weapon.name;
             document.getElementById('weapon-display').innerText = player.class.weapon.name;
 
@@ -787,7 +811,6 @@
                 const pellets = player.class.weapon.pellets || 1;
                 let hitAnything = false;
                 const targets = enemies.map(e => e.mesh.userData.hitbox).filter(h => h);
-                // Tiro colide com todos os objetos do mundo (incluindo Gloo Walls)
                 const walls = worldObjects;
                 for(let i = 0; i < pellets; i++) {
                     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -889,7 +912,6 @@
             });
         }
 
-        // --- FÍSICA ATUALIZADA (COLISÃO VERTICAL REAL) ---
         function updatePhysics(delta) {
             // Regen
             if (performance.now() - lastDamageTime > CONFIG.regenDelay && player.hp < 100 && player.hp > 0) {
@@ -981,6 +1003,7 @@
             if (gameActive) {
                 updatePhysics(delta);
                 updateBots(delta);
+                updateCooldownUI(); // Atualiza UI a cada frame
                 if (input.shoot && player.class.weapon.auto) shoot();
                 else if (input.shoot && !player.class.weapon.auto && !input.hasShot) { shoot(); input.hasShot = true; }
                 if (!input.shoot) input.hasShot = false;
@@ -995,8 +1018,6 @@
             document.getElementById('hp-bar').style.width = Math.max(0, player.hp) + '%';
             document.getElementById('ammo-display').innerText = player.ammo;
             document.getElementById('kill-display').innerText = player.kills;
-            document.getElementById('medkit-count').innerText = player.inventory.medkit;
-            document.getElementById('gloo-count').innerText = player.inventory.gloo;
         }
         function showHitmarker() {
             const el = document.getElementById('hitmarker-el');
