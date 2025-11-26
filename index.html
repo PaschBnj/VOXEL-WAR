@@ -60,7 +60,7 @@
         #reload-btn { bottom: 60px; right: 140px; width: 60px; height: 60px; font-size: 16px; }
 
         #touch-look-zone {
-            position: absolute; top: 0; bottom: 0; right: 0; width: 50%;
+            position: absolute; top: 0; bottom: 0; right: 0; width: 50%; /* Metade direita da tela */
             z-index: 9; pointer-events: auto;
             display: none; /* Controlado via JS */
         }
@@ -158,7 +158,7 @@
             <div class="relative z-10 w-full max-w-4xl flex flex-col md:flex-row gap-8 p-4">
                 <div class="flex-1 flex flex-col justify-center text-center md:text-left">
                     <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter mb-2 drop-shadow-xl"><span class="text-yellow-500">VOXEL</span><br>WAR</h1>
-                    <p class="text-gray-400 font-mono mb-8">v3.3: Mobile Touch Fix</p>
+                    <p class="text-gray-400 font-mono mb-8">v3.4: Fast Fire & Smooth Aim</p>
                     <button onclick="toClassSelect()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 px-8 rounded shadow-[0_4px_0_rgb(180,83,9)] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wide w-full md:w-auto">
                         JOGAR
                     </button>
@@ -171,10 +171,9 @@
         <div id="class-select" class="interactive hidden absolute inset-0 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center p-4 z-50">
             <h2 class="text-3xl md:text-4xl font-black text-white mb-8 uppercase tracking-widest text-center">Escolha Classe</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl overflow-y-auto max-h-[80vh]">
-                <!-- Added ontouchstart for immediate mobile response -->
                 <div onclick="startGame('assault')" ontouchstart="startGame('assault')" class="card-select bg-gray-800 border-2 border-gray-700 rounded-xl p-4 md:p-6 cursor-pointer hover:bg-gray-750">
                     <h3 class="text-2xl font-black text-blue-400">ASSALTO</h3>
-                    <p class="text-gray-400 text-sm">Equilibrado.</p>
+                    <p class="text-gray-400 text-sm">Equilibrado. Tiro Rápido.</p>
                 </div>
                 <div onclick="startGame('sniper')" ontouchstart="startGame('sniper')" class="card-select bg-gray-800 border-2 border-gray-700 rounded-xl p-4 md:p-6 cursor-pointer hover:bg-gray-750">
                     <h3 class="text-2xl font-black text-red-400">SNIPER</h3>
@@ -205,7 +204,7 @@
             document.getElementById('touch-look-zone').style.display = display;
         }
 
-        // Inicialmente oculto (estamos no menu)
+        // Inicialmente oculto
         setControlsVisibility(false);
 
         const AudioSys = {
@@ -248,8 +247,9 @@
             regenRate: 5 
         };
 
+        // Aumentado RPM da Assalto de 120 para 600 (10 tiros/seg)
         const CLASSES = {
-            assault: { name: "Assalto", hp: 100, speed: 1.0, color: 0x3B82F6, weapon: { name: "Rifle", damage: 15, rpm: 120, auto: true, mag: 30, reload: 1500, spread: 0.02, pellets: 1 } },
+            assault: { name: "Assalto", hp: 100, speed: 1.0, color: 0x3B82F6, weapon: { name: "Rifle", damage: 15, rpm: 600, auto: true, mag: 30, reload: 1500, spread: 0.03, pellets: 1 } },
             sniper: { name: "Sniper", hp: 80, speed: 0.95, color: 0xEF4444, weapon: { name: "AWP", damage: 100, rpm: 1500, auto: false, mag: 5, reload: 2500, spread: 0.001, scope: true, pellets: 1 } },
             shotgun: { name: "Escopeta", hp: 120, speed: 1.05, color: 0x10B981, weapon: { name: "Pump", damage: 10, pellets: 8, rpm: 1000, auto: false, mag: 6, reload: 2000, spread: 0.15 } }
         };
@@ -270,6 +270,7 @@
         let touchStartPos = { x: 0, y: 0 };
         let joystickActive = false;
         let joystickId = null;
+        let lookTouchId = null; // ID do toque para a câmera
 
         function init() {
             scene = new THREE.Scene();
@@ -523,21 +524,57 @@
                 const btnReload = document.getElementById('reload-btn');
                 btnReload.addEventListener('touchstart', (e) => { e.preventDefault(); reload(); });
 
+                // --- Lógica de Mira Mobile Melhorada (Multitouch ID) ---
                 const lookZone = document.getElementById('touch-look-zone');
                 let lastLookX = 0;
                 let lastLookY = 0;
+
                 lookZone.addEventListener('touchstart', (e) => {
-                    lastLookX = e.changedTouches[0].clientX;
-                    lastLookY = e.changedTouches[0].clientY;
-                });
-                lookZone.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
                     const touch = e.changedTouches[0];
-                    const dx = touch.clientX - lastLookX;
-                    const dy = touch.clientY - lastLookY;
-                    onMouseMove({ movementX: dx * 2, movementY: dy * 2 });
-                    lastLookX = touch.clientX;
-                    lastLookY = touch.clientY;
-                });
+                    // Se já não estamos rastreando um dedo de mira
+                    if (lookTouchId === null) {
+                        lookTouchId = touch.identifier;
+                        lastLookX = touch.clientX;
+                        lastLookY = touch.clientY;
+                    }
+                }, {passive: false});
+
+                lookZone.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (lookTouchId === null) return;
+
+                    // Encontrar o toque correto pelo ID
+                    let touch = null;
+                    for(let i = 0; i < e.changedTouches.length; i++) {
+                        if (e.changedTouches[i].identifier === lookTouchId) {
+                            touch = e.changedTouches[i];
+                            break;
+                        }
+                    }
+
+                    if (touch) {
+                        const dx = touch.clientX - lastLookX;
+                        const dy = touch.clientY - lastLookY;
+                        
+                        onMouseMove({ movementX: dx * 2.5, movementY: dy * 2.5 }); // Ajuste sensibilidade
+                        
+                        lastLookX = touch.clientX;
+                        lastLookY = touch.clientY;
+                    }
+                }, {passive: false});
+
+                const endLook = (e) => {
+                    e.preventDefault();
+                    for(let i = 0; i < e.changedTouches.length; i++) {
+                        if (e.changedTouches[i].identifier === lookTouchId) {
+                            lookTouchId = null; // Soltou o dedo da mira
+                            break;
+                        }
+                    }
+                };
+                lookZone.addEventListener('touchend', endLook);
+                lookZone.addEventListener('touchcancel', endLook);
             }
         }
 
